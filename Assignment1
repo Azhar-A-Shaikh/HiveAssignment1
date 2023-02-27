@@ -1,0 +1,118 @@
+### Loading Data Into HDFS
+
+PS C:\Users\Azhar\desktop\hive> docker cp sales_data.csv namenode:sales_data.csv
+PS C:\Users\Azhar\desktop\hive> docker exec -it namenode bash
+root@ec151afebe5e:/# hdfs dfs -mkdir -p /data/all_data/sales_data
+root@ec151afebe5e:/# hdfs dfs -put sales_data.csv /data/all_data/sales_data/sales_data.csv
+2023-02-27 07:12:17,322 INFO sasl.SaslDataTransferClient: SASL encryption trust check: localHostTrusted = false, remoteHostTrusted = false
+
+### Creating Sales data table CSV file in Hive as
+
+create table sales_order_data_csv_v1
+(
+ORDERNUMBER int,
+QUANTITYORDERED int,
+PRICEEACH float,
+ORDERLINENUMBER int,
+SALES float,
+STATUS string,
+QTR_ID int,
+MONTH_ID int,
+YEAR_ID int,
+PRODUCTLINE string,
+MSRP int,
+PRODUCTCODE string,
+PHONE string,
+CITY string,
+STATE string,
+POSTALCODE string,
+COUNTRY string,
+TERRITORY string,
+CONTACTLASTNAME string,
+CONTACTFIRSTNAME string,
+DEALSIZE string
+)
+row format delimited
+fields terminated by ','
+STORED AS TEXTFILE
+location '/data/all_data/sales_data';
+
+### Creating a ORC Table 
+
+create table sales_order_data_orc
+(
+ORDERNUMBER int,
+QUANTITYORDERED int,
+PRICEEACH float,
+ORDERLINENUMBER int,
+SALES float,
+STATUS string,
+QTR_ID int,
+MONTH_ID int,
+YEAR_ID int,
+PRODUCTLINE string,
+MSRP int,
+PRODUCTCODE string,
+PHONE string,
+CITY string,
+STATE string,
+POSTALCODE string,
+COUNTRY string,
+TERRITORY string,
+CONTACTLASTNAME string,
+CONTACTFIRSTNAME string,
+DEALSIZE string
+)
+stored as orc;
+
+### Copying data from sales_order_data_csv_v1 to sales_order_data_orc
+
+from sales_order_data_csv_v1 insert overwrite table sales_order_data_orc select *;
+
+## Q1. Calculatye total sales per year
+SELECT YEAR_ID, SUM(SALES) as TotalSales
+FROM sales_order_data_orc
+GROUP BY YEAR_ID;
+
+## Q2. Find a product for which maximum orders were placed.
+SELECT PRODUCTCODE, COUNT(*) AS TotalOrders
+FROM sales_order_data_orc
+GROUP BY PRODUCTCODE
+ORDER BY TotalOrders DESC
+LIMIT 1;
+
+## Q3. Calculate the total sales for each quarter
+SELECT QTR_ID, SUM(SALES) as TotalSales
+FROM sales_order_data_orc
+GROUP BY QTR_ID;
+
+## Q4. In which quarter sales was minimum
+SELECT QTR_ID, sum(SALES) as Sales_qtr
+FROM sales_order_data_orc
+GROUP BY QTR_ID
+ORDER BY Sales_qtr
+LIMIT 1;
+
+## Q5. In which country sales was maximum and in which country sales was minimum
+SELECT country, TotalSales
+FROM (
+  SELECT COUNTRY, SUM(SALES) as TotalSales, 
+         ROW_NUMBER() OVER (ORDER BY SUM(SALES) DESC) AS rank_desc, 
+         ROW_NUMBER() OVER (ORDER BY SUM(SALES) ASC) AS rank_asc
+  FROM sales_order_data_orc
+  GROUP BY COUNTRY
+) subquery
+WHERE rank_desc = 1 OR rank_asc = 1;
+
+## Q6. Calculate quartelry sales for each city
+SELECT CITY, QTR_ID, SUM(SALES) as QuarterlySales
+FROM sales_order_data_orc
+GROUP BY CITY, QTR_ID;
+
+## Q7. Find a month for each year in which maximum number of quantities were sold
+SELECT YEAR_ID, MONTH_ID, MAX(QUANTITYORDERED) as MaxQuantity
+FROM sales_order_data_orc
+GROUP BY YEAR_ID, MONTH_ID;
+
+
+
